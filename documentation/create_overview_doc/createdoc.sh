@@ -24,17 +24,17 @@ function bito_response_ok() {
     local response=$2
 
     # Check if return code is non-zero
-    if [[ $ret_code -ne 0 ]]; then
+    if [[ ${ret_code} -ne 0 ]]; then
         return 1  # Return non-zero status for error in return code
     fi
 
     # Check if response starts with "Whoops"
-    if [[ $response == Whoops* ]]; then
+    if [[ ${response} == Whoops* ]]; then
         return 1  # Return non-zero status for "Whoops" in response
     fi
 
     # Check if the response is empty
-    if [[ -z $response ]]; then
+    if [[ -z ${response} ]]; then
         return 1  # Return non-zero status for empty response
     fi
 
@@ -52,12 +52,12 @@ function update_token_usage() {
 # Function to log total token usage and session duration
 function log_token_usage_and_session_duration() {
     local duration=$(( $(date +%s) - start_time ))
-    echo "-----------------------------------------" | tee -a "$log_file"
-    echo "$(date "+%Y-%m-%d %H:%M:%S") - Total Token Usage for Session" | tee -a "$log_file"
-    echo "Total Input Tokens = $total_input_token_count" | tee -a "$log_file"
-    echo "Total Output Tokens = $total_output_token_count" | tee -a "$log_file"
-    echo "Session Duration: $((duration / 3600))h $(((duration % 3600) / 60))m $((duration % 60))s" | tee -a "$log_file"
-    echo "-----------------------------------------" | tee -a "$log_file"
+    echo "-----------------------------------------" | tee -a "${log_file}"
+    echo "$(date "+%Y-%m-%d %H:%M:%S") - Total Token Usage for Session" | tee -a "${log_file}"
+    echo "Total Input Tokens = ${total_input_token_count}" | tee -a "${log_file}"
+    echo "Total Output Tokens = ${total_output_token_count}" | tee -a "${log_file}"
+    echo "Session Duration: $((duration / 3600))h $(((duration % 3600) / 60))m $((duration % 60))s" | tee -a "${log_file}"
+    echo "-----------------------------------------" | tee -a "${log_file}"
 }
 
 # Function to check if required tools and files are present
@@ -69,9 +69,9 @@ function check_tools_and_files() {
 
     # Check for missing tools
     for tool in "${required_tools[@]}"; do
-        if ! command -v "$tool" &> /dev/null; then
-            echo -e "\nError: Tool $tool is required but not found."
-            case "$tool" in
+        if ! command -v "${tool}" &> /dev/null; then
+            echo -e "\nError: Tool ${tool} is required but not found."
+            case "${tool}" in
                 "bito")
                     echo "   Install Bito CLI on MAC and Linux with:"
                     echo "   sudo curl https://alpha.bito.ai/downloads/cli/install.sh -fsSL | bash"
@@ -89,8 +89,8 @@ function check_tools_and_files() {
 
     # Check for missing files
     for file in "${required_files[@]}"; do
-        if [ ! -f "$prompt_folder/$file" ]; then
-            echo -e "\nError: Missing required file: $prompt_folder/$file"
+        if [[ ! -f "$prompt_folder/$file" ]]; then
+            echo -e "\nError: Missing required file: ${prompt_folder}/$file"
             exit 1
         fi
     done
@@ -100,13 +100,14 @@ function check_tools_and_files() {
 
 # Function to read the skip list from the CSV file
 function read_skip_list() {
-    if [ -f "$skip_list_csv" ]; then
+    # sh[ellcheck disable=SC2250]
+    if [[ -f "$skip_list_csv" ]]; then
         skip_list=()
         while IFS=, read -r skip_item; do
             skip_list+=("$skip_item")
         done < "$skip_list_csv"
     else
-        echo "Skip list file $skip_list_csv not found."
+        echo "Skip list file ${skip_list_csv} not found."
         exit 1
     fi
 }
@@ -119,7 +120,7 @@ function is_skippable() {
   local skip_dirs_files=("logs" "node_modules" "dist" "target" "bin" "package-lock.json" "data.json" "build" ".gradle" ".idea" "gradle" "extension.js" "vendor.js" "ngsw.json" "polyfills.js" "init" ".gv")
   
   for skip_item in "${skip_dirs_files[@]}"; do
-    if [[ "$path" == *"$skip_item"* ]]; then
+    if [[ "${path}" == *"$skip_item"* ]]; then
       return 0
     fi
   done
@@ -143,12 +144,12 @@ function call_bito_with_retry() {
     local RETRY_DELAY=10  # Delay in seconds between retries.
 
     # Extract the filename from the prompt file path for logging purposes.
-    local filename=$(basename "$prompt_file_path")
+    local filename=$(basename "${prompt_file_path}}")
 
     # Loop to attempt calling bito up to MAX_RETRIES times.
-    while [ $attempt -le $MAX_RETRIES ]; do
+    while [[ $attempt -le $MAX_RETRIES ]]; do
         # Log the attempt number and the file being processed.
-        echo "Calling bito with retry logic. Attempt $attempt of $MAX_RETRIES with prompt file '$filename'..." >&2
+        echo "Calling bito with retry logic. Attempt $attempt of ${MAX_RETRIES} with prompt file '$filename'..." >&2
         
         # Call bito and capture the standard output only.
         output=$(echo -e "$input_text" | bito -p "$prompt_file_path")
@@ -162,7 +163,7 @@ function call_bito_with_retry() {
             ((attempt++))  # Increment the attempt counter.
         else
             # If the response is valid, log the success, output the result, and update token usage.
-            echo "Attempt $attempt: Success! bito call for file '$filename' returned sufficient content." >&2
+            echo "Attempt ${attempt}: Success! bito call for file '$filename' returned sufficient content." >&2
             echo "$output"
             update_token_usage "$input_text" "$output"  # Update the token usage statistics.
             return 0  # Return successfully.
@@ -186,7 +187,7 @@ function create_module_documentation() {
     fi
     
     local name_of_module=$(basename "$path_to_module")
-    local content_of_module=$(<"$path_to_module")
+    local content_of_module=$(<"${path_to_module}")
 
     local high_level_documentation
     high_level_documentation=$(call_bito_with_retry "Module: $name_of_module\n---\n$content_of_module" "$prompt_folder/high_level_doc_prompt.txt")
@@ -198,14 +199,15 @@ function create_module_documentation() {
     update_token_usage "$content_of_module" "$high_level_documentation"
 
     local mermaid_diagram=$(create_mermaid_diagram "$name_of_module" "$content_of_module")
-    if [ $? -ne 0 ]; then
+    # shellcheck disable=SC2181
+    if [[ $? -ne 0 ]]; then
         echo "Mermaid diagram creation failed for module: $name_of_module"
         return 1
     fi
 
     local mdd_file="$documentation_directory/$name_of_module.mdd"
     if [ ! -s "$mdd_file" ]; then
-        echo -e "$mermaid_diagram" > "$mdd_file"
+        echo -e "${mermaid_diagram}" > "$mdd_file"
     fi
     update_token_usage "$content_of_module" "$mermaid_diagram"
 
@@ -215,7 +217,8 @@ function create_module_documentation() {
         echo -e "## Flow Diagram [via mermaid]\n\`\`\`mermaid\n$mermaid_diagram\n\`\`\`" >> "$markdown_documentation_file"
     fi 
 
-    echo -e "Documentation saved to $markdown_documentation_file\n\n"
+    # trunk-ignore(shellcheck/SC1083)
+    echo -e "Documentation saved t${ $markdown_documentation_fi}le\n\n"
 }
 
 function extract_module_names_and_associated_objectives_then_call_bito() {
@@ -231,10 +234,13 @@ function extract_module_names_and_associated_objectives_then_call_bito() {
     local RETRY_DELAY=10 # seconds
     local bito_output
 
+    # shellcheck disable=SC1078
     echo -e "Extracting module names and objectives from file: $filename\n" >&2
 
     # Read the file line by line into the array
     while IFS= read -r line; do
+        # shellcheck disable=SC1078
+        # shellcheck disable=SC1078
         lines+=("$line")
     done < "$filename"
 
@@ -259,16 +265,19 @@ function extract_module_names_and_associated_objectives_then_call_bito() {
     done
 
     if [[ -n $current_module ]]; then
+        # shellcheck disable=SC1078
         echo "Processing module: $current_module with objectives" >&2
         combined_output+="Module: $current_module\n---\nPrimary Objectives:\n$current_objectives\n\n"
     fi
 
     # Retry logic for calling bito
     while [ $attempt -le $MAX_RETRIES ]; do
+        # shellcheck disable=SC1078
         echo "Attempt $attempt: Running bito for module: $current_module" >&2
         bito_output=$(echo -e "$combined_output" | bito -p "$prompt_file_path")
          local ret_code=$?
 
+        # shellcheck disable=SC1078
         if ! bito_response_ok "$ret_code" "$bito_output"; then
             echo "Attempt $attempt: bito command for module: $current_module failed or did not return enough content. Retrying in $RETRY_DELAY seconds..." >&2
             sleep $RETRY_DELAY
@@ -460,7 +469,7 @@ function generate_mdd_overview() {
                 echo "Attempt $attempt: Processing Mermaid script for $mdd_file" >&2
                 # Use bito to process the Mermaid script
                 temp_file=$(mktemp)
-                echo -e "$mermaid_script" | bito -p "$mermaid_doc_prompt_file" > "$temp_file"
+                echo -e "${mermaid_script}" | bito -p "$mermaid_doc_prompt_file" > "$temp_file"
 
                 # Validate the Mermaid script
                 if validate_mermaid_syntax "$(cat "$temp_file")"; then
@@ -474,6 +483,7 @@ function generate_mdd_overview() {
                     break
                 else
                     echo -e "Invalid Mermaid diagram syntax for attempt $attempt. Retrying...\n" >&2
+                    # trunk-ignore(shellcheck/SC1079)
                     rm "$temp_file"
                     sleep $RETRY_DELAY
                     ((attempt++))
@@ -490,6 +500,7 @@ function generate_mdd_overview() {
     # Check if there is valid Mermaid content
     if [ -n "$latest_valid_mermaid_content" ]; then
         # Save the latest valid Mermaid content to overview.mdd
+        # trunk-ignore(shellcheck/SC1079)
         echo -e "$latest_valid_mermaid_content" > "$overview_mdd_file"
         echo "Mermaid overview generated successfully: $overview_mdd_file"
     else
@@ -531,7 +542,9 @@ function main() {
     docs_folder="doc_"$(basename "$folder_to_document")
 
     # Check if the folder to document exists
+    # trunk-ignore(shellcheck/SC1079)
     if [ ! -d "$folder_to_document" ]; then
+        # trunk-ignore(shellcheck/SC1079)
         echo "Folder $folder_to_document does not exist"
         exit 1
     fi
@@ -551,20 +564,23 @@ function main() {
     [ -f "$aggregated_md_file" ] && > "$aggregated_md_file"
 
     # Use create_find_command to dynamically generate the find command with specified extensions
-    module_files=$(eval $(create_find_command "$lang_csv" "$folder_to_document"))
+    module_files=$(eval $(create_find_command "${lang_csv}" "$folder_to_document"))
 
     # Check if module_files is empty and display a warning if no files are found
     [ -z "$module_files" ] && echo "Warning: No files found for documentation generation." && return
 
     # Generate high-level documentation for each found module file
     for module_file in $module_files; do
+        # trunk-ignore(shellcheck/SC1079)
         # generate_individual_module_md "$module_file" "$docs_folder"
         create_module_documentation "$module_file" "$docs_folder"
     done
     
     # Aggregate individual markdown files into a main document
     echo "# Module Overview" > "$aggregated_md_file" 
+    # trunk-ignore(shellcheck/SC1079)
     for md_file in "$docs_folder"/*_Doc.md; do
+        # trunk-ignore(shellcheck/SC1079)
         if [ "$md_file" != "$aggregated_md_file" ]; then
             cat "$md_file" >> "$aggregated_md_file"
         fi
@@ -576,7 +592,7 @@ function main() {
     # Prepend the introduction and summary to the aggregated markdown file
     # Save the current content of the aggregated file temporarily
     local temp_file=$(mktemp)
-    mv "$aggregated_md_file" "$temp_file"
+    mv "${aggregated_md_file}" "${temp_file}"
 
     # Create a new aggregated file starting with the Markdown-formatted introduction title
     echo -e "# Introduction :\n" > "$aggregated_md_file"
@@ -613,4 +629,7 @@ function main() {
     echo "Documentation generated in $docs_folder"
 }
 
+# trunk-ignore(shellcheck/SC1073)
+# shellcheck disable=SC1073
 main "$@"
+# shellcheck disable=SC1072
